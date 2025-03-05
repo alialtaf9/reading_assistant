@@ -173,6 +173,10 @@
   border-radius: 20px;
   font-size: 14px;
   outline: none;
+  font-family: inherit;
+  resize: vertical;
+  min-height: 34px;
+  max-height: 200px;
 }
 
 .chat-input:focus {

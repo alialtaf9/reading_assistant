@@ -21,6 +21,7 @@ export interface ChatWindowProps {
   onSendMessage: (message: string) => void;
   isLoading: boolean;
   pageContext: string;
+  selectedText?: string;
 }
 
 interface Message {
@@ -39,7 +40,8 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
   onClose, 
   onSendMessage, 
   isLoading, 
-  pageContext 
+  pageContext,
+  selectedText = '' 
 }) => {
   const [messages, setMessages] = useState<Message[]>([
     { role: 'assistant', text: 'Hello! I can help answer questions about this page. What would you like to know?' }
@@ -50,6 +52,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
   const [wordCount, setWordCount] = useState<number>(0);
   const [pageMetadata, setPageMetadata] = useState<PageMetadata>({});
   const [refreshingContent, setRefreshingContent] = useState(false);
+  const [inputText, setInputText] = useState(selectedText);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   
@@ -106,6 +109,9 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
         
         // Content refresh is complete
         setRefreshingContent(false);
+      } else if (event.data.action === 'addSelectedText') {
+        // Handle selected text from right-click context menu
+        setInputText(event.data.selectedText || '');
       }
     };
     
@@ -237,6 +243,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
         <ChatInput 
           onSubmit={handleSendMessage} 
           isDisabled={isLoading || processingMessage || hasApiKey === null}
+          initialText={inputText}
         />
       </div>
       

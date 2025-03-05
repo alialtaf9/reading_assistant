@@ -32,6 +32,7 @@ const Overlay: React.FC = () => {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [wordCount, setWordCount] = useState<number>(0);
   const [pageMetadata, setPageMetadata] = useState<PageMetadata>({});
+  const [selectedText, setSelectedText] = useState<string>('');
   
   // Set up message listener to receive text from content script
   useEffect(() => {
@@ -51,6 +52,9 @@ const Overlay: React.FC = () => {
         if (event.data.metadata) {
           setPageMetadata(event.data.metadata);
         }
+      } else if (event.data.action === 'addSelectedText') {
+        // Store selected text from right-click context menu
+        setSelectedText(event.data.selectedText || '');
       }
     };
     
@@ -91,6 +95,7 @@ const Overlay: React.FC = () => {
         onSendMessage={handleSendMessage}
         isLoading={isLoading}
         pageContext={pageText}
+        selectedText={selectedText}
       />
     </div>
   );

@@ -18,6 +18,13 @@ chrome.runtime.onInstalled.addListener((details) => {
     const thisVersion = chrome.runtime.getManifest().version;
     // Possibly notify user of updates
   }
+  
+  // Create the "Add to Chat" context menu
+  chrome.contextMenus.create({
+    id: "addToChatGPT",
+    title: "Add to Chat",
+    contexts: ["selection"]
+  });
 });
 
 /**
@@ -59,6 +66,29 @@ chrome.commands.onCommand.addListener((command) => {
         });
       }
     });
+  }
+});
+
+// Handle context menu item clicks
+chrome.contextMenus.onClicked.addListener((info, tab) => {
+  if (info.menuItemId === "addToChatGPT" && tab?.id) {
+    const selectedText = info.selectionText || "";
+    
+    // First make sure the overlay is open
+    chrome.tabs.sendMessage(tab.id, { 
+      action: 'toggleOverlay',
+      forceState: true // Force the overlay to open if it's not already
+    });
+    
+    // Then send the selected text to be added to the chat
+    setTimeout(() => {
+      if (tab?.id) {
+        chrome.tabs.sendMessage(tab.id, { 
+          action: 'addSelectedText',
+          selectedText: selectedText
+        });
+      }
+    }, 500); // Give a short delay to ensure overlay is open
   }
 });
 

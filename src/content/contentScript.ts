@@ -21,6 +21,7 @@ interface PageMetadata {
 interface ToggleOverlayMessage {
   action: 'toggleOverlay';
   timestamp?: string;
+  forceState?: boolean;
 }
 
 interface ApiKeyMessage {
@@ -49,8 +50,16 @@ interface ContentMessage {
   error?: string;
 }
 
+interface SelectedTextMessage {
+  action: 'addSelectedText';
+  selectedText: string;
+}
+
 // Define a union type for all message types
-type Message = ToggleOverlayMessage | ApiKeyMessage | ChatMessage | ContentMessage;
+type Message = ToggleOverlayMessage | ApiKeyMessage | ChatMessage | ContentMessage | SelectedTextMessage;
+
+// Store selected text for the chat
+let selectedText: string = '';
 
 // Keep track of if the overlay is currently shown
 let overlayVisible = false;
@@ -342,8 +351,21 @@ function handleRuntimeMessage(
   sender: chrome.runtime.MessageSender, 
   sendResponse: (response?: any) => void
 ): boolean {
-  if (message && message.action === 'toggleOverlay') {
-    handleToggleOverlay();
+  if (message.action === 'toggleOverlay') {
+    handleToggleOverlay(message.forceState);
+    sendResponse({success: true});
+  } else if (message.action === 'addSelectedText') {
+    // Store the selected text and forward it to the overlay
+    selectedText = message.selectedText;
+    
+    if (overlayVisible && overlayFrame) {
+      // Send the selected text to the chat UI with a new line at the end
+      overlayFrame.contentWindow?.postMessage({
+        action: 'addSelectedText',
+        selectedText: selectedText + "\n\n"
+      }, '*');
+    }
+    
     sendResponse({success: true});
   } else {
     sendResponse({error: 'Unknown action', received: message});
