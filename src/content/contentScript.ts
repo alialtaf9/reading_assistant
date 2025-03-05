@@ -6,30 +6,21 @@
 import { openAIService } from '../services/openaiService';
 import { contentExtractor } from '../services/contentExtractor';
 
-// Add extensive logging for debugging
-console.log('Content script loaded at ' + new Date().toISOString());
-
-// Add a visible element to the page
-const indicator = document.createElement('div');
-indicator.textContent = 'ChatGPT Assistant Content Script Loaded';
-indicator.style.position = 'fixed';
-indicator.style.top = '0';
-indicator.style.right = '0';
-indicator.style.backgroundColor = 'yellow';
-indicator.style.padding = '5px';
-indicator.style.zIndex = '10000';
-indicator.style.fontSize = '12px';
-document.body.appendChild(indicator);
-
-// Log DOM information
-console.log('Page URL:', window.location.href);
-console.log('DOM ready state:', document.readyState);
-
 // Define types for message handling
 interface Message {
   action: string;
   timestamp?: string;
-  [key: string]: any;
+  query?: string;
+  context?: string;
+  apiKey?: string;
+  processing?: boolean;
+  response?: string;
+  success?: boolean;
+  error?: string;
+  text?: string;
+  wordCount?: number;
+  metadata?: any;
+  hasApiKey?: boolean;
 }
 
 // Keep track of if the overlay is currently shown
@@ -39,10 +30,9 @@ let extractedPageContent: string | null = null;
 let lastProcessedUrl: string = window.location.href;
 
 // Set up URL change detection for SPAs like Gmail
-setInterval(() => {
+const urlChangeDetector: number = window.setInterval(() => {
   const currentUrl = window.location.href;
   if (currentUrl !== lastProcessedUrl) {
-    console.log('URL changed from', lastProcessedUrl, 'to', currentUrl);
     lastProcessedUrl = currentUrl;
     // Clear the cache to ensure fresh content extraction on URL change
     extractedPageContent = null;
@@ -54,12 +44,15 @@ setInterval(() => {
   }
 }, 1000); // Check every second
 
+// Clean up interval when extension is unloaded
+window.addEventListener('unload', () => {
+  window.clearInterval(urlChangeDetector);
+});
+
 /**
  * Create and add the overlay iframe to the page
  */
 function createOverlay(): HTMLIFrameElement {
-  console.log('Creating overlay iframe');
-  
   // Create iframe for isolated React environment
   const iframe = document.createElement('iframe');
   iframe.src = chrome.runtime.getURL('overlay-ui/index.html');
@@ -79,7 +72,6 @@ function createOverlay(): HTMLIFrameElement {
   
   // Add to the DOM
   document.body.appendChild(iframe);
-  console.log('Overlay iframe added to DOM');
   
   // Set up message communication with iframe
   window.addEventListener('message', handleIframeMessage);
@@ -91,8 +83,6 @@ function createOverlay(): HTMLIFrameElement {
  * Handle messages from the React overlay
  */
 function handleIframeMessage(event: MessageEvent): void {
-  console.log('Content script received iframe message:', event.data);
-  
   // Only process messages from our iframe
   if (!overlayFrame || event.source !== overlayFrame.contentWindow) {
     return;
@@ -156,8 +146,6 @@ function checkApiKey(): void {
  */
 async function handleChatGPTRequest(query: string, context: string): Promise<void> {
   try {
-    console.log('Sending to ChatGPT:', query);
-    
     // Notify the UI that we're processing
     overlayFrame?.contentWindow?.postMessage({
       action: 'chatGptProcessing',
@@ -170,7 +158,7 @@ async function handleChatGPTRequest(query: string, context: string): Promise<voi
     }
     
     // Send to OpenAI API
-    const response = await openAIService.sendMessage(query, extractedPageContent);
+    const response = await openAIService.sendMessage(query, context);
     
     // Send the response back to the iframe
     overlayFrame?.contentWindow?.postMessage({
@@ -180,7 +168,6 @@ async function handleChatGPTRequest(query: string, context: string): Promise<voi
     }, '*');
   } catch (err: unknown) {
     const errorMessage = err instanceof Error ? err.message : String(err);
-    console.error('Error calling ChatGPT:', errorMessage);
     
     // Send error to the iframe
     overlayFrame?.contentWindow?.postMessage({
@@ -205,24 +192,28 @@ function sendExtractedPageContent(): void {
     // Extract content if we haven't already
     if (!extractedPageContent) {
       extractedPageContent = extractContent();
+      const extractedResult = contentExtractor.extractContent();
+      const wordCount = extractedResult.wordCount;
+      
+      // Send the content to the iframe
+      overlayFrame?.contentWindow?.postMessage({
+        action: 'pageTextExtracted',
+        text: extractedPageContent,
+        wordCount: wordCount,
+        metadata: extractedResult.metadata
+      }, '*');
+    } else {
+      // Use cached content
+      const extractedResult = contentExtractor.extractContent();
+      overlayFrame?.contentWindow?.postMessage({
+        action: 'pageTextExtracted',
+        text: extractedPageContent,
+        wordCount: extractedResult.wordCount,
+        metadata: extractedResult.metadata
+      }, '*');
     }
-    
-    // Extract main content (just for word count display)
-    const extractedResult = contentExtractor.extractContent();
-    const wordCount = extractedResult.wordCount;
-    
-    // Send the content to the iframe
-    overlayFrame?.contentWindow?.postMessage({
-      action: 'pageTextExtracted',
-      text: extractedPageContent,
-      wordCount: wordCount,
-      metadata: extractedResult.metadata
-    }, '*');
-    
-    console.log(`Sent extracted content to overlay (${wordCount} words)`);
   } catch (err: unknown) {
     const errorMessage = err instanceof Error ? err.message : String(err);
-    console.error('Error extracting page content:', errorMessage);
     
     // Send a fallback text
     const fallbackText = document.body.innerText.substring(0, 5000) + '... (truncated)';
@@ -239,7 +230,6 @@ function sendExtractedPageContent(): void {
  * Extract and format content from the page
  */
 function extractContent(): string {
-  console.log('Extracting page content using ContentExtractor service');
   try {
     // Use our content extractor to get structured content
     const extractedContent = contentExtractor.extractContent();
@@ -247,13 +237,8 @@ function extractContent(): string {
     // Format it for ChatGPT
     const formattedContent = contentExtractor.formatContentForChatGPT(extractedContent);
     
-    console.log(`Successfully extracted ${extractedContent.wordCount} words from page`);
-    
     return formattedContent;
   } catch (err: unknown) {
-    const errorMessage = err instanceof Error ? err.message : String(err);
-    console.error('Error in content extraction:', errorMessage);
-    
     // Fallback to the simple extraction method
     return extractPageTextSimple();
   }
@@ -273,7 +258,6 @@ function extractPageTextSimple(): string {
   }
   
   const wordCount = text.split(/\s+/).filter(Boolean).length;
-  console.log(`Used fallback extraction: ${wordCount} words extracted`);
   
   // Add basic metadata
   return `PAGE INFORMATION:
@@ -295,13 +279,8 @@ function handleToggleOverlay(forceState?: boolean): void {
     try {
       overlayFrame = createOverlay();
       overlayVisible = true;
-      indicator.textContent = 'Overlay added at ' + new Date().toISOString();
-      indicator.style.backgroundColor = 'lightgreen';
     } catch (err: unknown) {
-      const errorMessage = err instanceof Error ? err.message : String(err);
-      console.error('Error creating overlay:', errorMessage);
-      indicator.textContent = 'Error: ' + errorMessage;
-      indicator.style.backgroundColor = 'red';
+      // Handle silently - no error indication needed
     }
   } else if (newState && overlayFrame) {
     // Show the existing overlay
@@ -314,25 +293,18 @@ function handleToggleOverlay(forceState?: boolean): void {
   }
 }
 
-// Debug message listener
+/**
+ * Message listener for the background script
+ */
 function handleRuntimeMessage(
   message: Message, 
   sender: chrome.runtime.MessageSender, 
   sendResponse: (response?: any) => void
 ): boolean {
-  console.log('Content script received message:', message);
-  
-  // Update the indicator with the message received
-  indicator.textContent = 'Received: ' + JSON.stringify(message);
-  
   if (message && message.action === 'toggleOverlay') {
-    console.log('Processing toggleOverlay action');
     handleToggleOverlay();
-    // Send a success response
-    console.log('Sending success response');
-    sendResponse({success: true, time: new Date().toISOString()});
+    sendResponse({success: true});
   } else {
-    console.warn('Unknown message action or missing action property');
     sendResponse({error: 'Unknown action', received: message});
   }
   
@@ -340,26 +312,4 @@ function handleRuntimeMessage(
 }
 
 // Register the message listener
-try {
-  chrome.runtime.onMessage.addListener(handleRuntimeMessage);
-  console.log('Message listener registered successfully');
-} catch (err: unknown) {
-  const errorMessage = err instanceof Error ? err.message : String(err);
-  console.error('Error registering message listener:', errorMessage);
-  indicator.textContent = 'Error registering listener: ' + errorMessage;
-}
-
-// Test if we can send messages back to the extension
-setTimeout(() => {
-  console.log('Sending test message from content script');
-  try {
-    chrome.runtime.sendMessage({action: 'contentScriptTest', time: new Date().toISOString()});
-    console.log('Test message sent');
-  } catch (err: unknown) {
-    const errorMessage = err instanceof Error ? err.message : String(err);
-    console.error('Error sending test message:', errorMessage);
-  }
-}, 2000);
-
-// Log that script completed loading
-console.log('Content script setup complete at ' + new Date().toISOString()); 
+chrome.runtime.onMessage.addListener(handleRuntimeMessage); 

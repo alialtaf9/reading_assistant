@@ -66,7 +66,6 @@ export class ContentExtractor {
    * Extract content specifically from Gmail
    */
   private extractGmailContent(): ContentSection[] {
-    console.log('Extracting content from Gmail');
     const sections: ContentSection[] = [];
     
     try {
@@ -88,7 +87,6 @@ export class ContentExtractor {
       const emailBodyElements = document.querySelectorAll('[role="listitem"] [data-message-id] div[dir="ltr"], [role="listitem"] [data-message-id] div[dir="auto"]');
       
       if (emailBodyElements.length > 0) {
-        console.log('Found email content using method 1:', emailBodyElements.length, 'elements');
         emailBodyElements.forEach((element, index) => {
           const senderElement = element.closest('[data-message-id]')?.querySelector('[email]');
           const sender = senderElement?.textContent?.trim() || `Sender ${index + 1}`;
@@ -104,7 +102,6 @@ export class ContentExtractor {
         const alternativeEmailBodies = document.querySelectorAll('.a3s.aiL, [role="listitem"] [data-message-id] .ii.gt');
         
         if (alternativeEmailBodies.length > 0) {
-          console.log('Found email content using method 2:', alternativeEmailBodies.length, 'elements');
           alternativeEmailBodies.forEach((element, index) => {
             const messageContainer = element.closest('[data-message-id]');
             const senderElement = messageContainer?.querySelector('[email], .gD');
@@ -125,7 +122,6 @@ export class ContentExtractor {
             });
           
           if (visibleEmailContent.length > 0) {
-            console.log('Found email content using method 3:', visibleEmailContent.length, 'elements');
             visibleEmailContent.forEach((element, index) => {
               sections.push({
                 heading: `Email Content ${index + 1}`,
@@ -141,7 +137,6 @@ export class ContentExtractor {
       if (sections.length <= 1) { // Only subject, no email body
         const mainElement = document.querySelector('[role="main"]');
         if (mainElement) {
-          console.log('Falling back to main element content');
           sections.push({
             heading: 'Email Content',
             content: mainElement.textContent?.trim() || '',
@@ -153,7 +148,6 @@ export class ContentExtractor {
       // Get email list if in inbox view
       const emailListItems = document.querySelectorAll('tr[role="row"]');
       if (emailListItems.length > 5) { // Looks like an inbox
-        console.log('Found inbox email list with', emailListItems.length, 'emails');
         let emailListContent = '';
         
         emailListItems.forEach((row, index) => {
@@ -181,8 +175,6 @@ export class ContentExtractor {
         }
       }
     } catch (error) {
-      console.error('Error extracting Gmail content:', error);
-      
       // Fallback: use simple method
       sections.push({
         content: document.body.innerText,

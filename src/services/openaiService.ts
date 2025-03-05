@@ -51,9 +51,6 @@ export class OpenAIService {
       chrome.storage.sync.get(['openai_api_key'], (result) => {
         if (result.openai_api_key) {
           this.apiKey = result.openai_api_key;
-          console.log('API key loaded from storage');
-        } else {
-          console.log('No API key found in storage');
         }
         resolve();
       });
@@ -67,7 +64,6 @@ export class OpenAIService {
     this.apiKey = apiKey;
     return new Promise((resolve) => {
       chrome.storage.sync.set({ openai_api_key: apiKey }, () => {
-        console.log('API key saved to storage');
         resolve();
       });
     });
@@ -122,11 +118,10 @@ export class OpenAIService {
       const data = await response.json() as OpenAIResponse;
       return data.choices[0].message.content;
     } catch (error) {
-      console.error('Error calling OpenAI API:', error);
       if (error instanceof Error) {
-        return `Error: ${error.message}`;
+        throw error;
       }
-      return 'An unknown error occurred when calling the OpenAI API';
+      throw new Error('An unknown error occurred when calling the OpenAI API');
     }
   }
 }
