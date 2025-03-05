@@ -188,7 +188,7 @@ export class ContentExtractor {
   /**
    * Extract metadata from the page
    */
-  private extractMetadata(): PageMetadata {
+  public extractMetadata(): PageMetadata {
     const title = document.title || '';
     const url = window.location.href;
     
@@ -409,7 +409,7 @@ export class ContentExtractor {
     const maxContentLength = 8000; // Limit to 8000 characters
     if (formattedContent.length > maxContentLength) {
       formattedContent = formattedContent.substring(0, maxContentLength);
-      formattedContent += `\n\n[Content truncated due to length. ${wordCount} total words on page]`;
+      formattedContent += `\n\n[Content truncated due to length limit (${maxContentLength} characters). ${wordCount} total words on page]`;
     }
     
     return formattedContent;

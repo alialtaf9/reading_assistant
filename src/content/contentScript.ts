@@ -1,6 +1,9 @@
 /**
  * @description
  * Content script that handles DOM manipulation and communication with the background script.
+ * 
+ * This script is injected into web pages to provide ChatGPT-powered assistance.
+ * It extracts page content, handles user messages, and manages the overlay UI.
  */
 
 import { openAIService } from '../services/openaiService';
@@ -44,10 +47,12 @@ const urlChangeDetector: number = window.setInterval(() => {
   }
 }, 1000); // Check every second
 
-// Clean up interval when extension is unloaded
-window.addEventListener('unload', () => {
-  window.clearInterval(urlChangeDetector);
-});
+// Register the interval ID for cleanup in extension context
+try {
+  chrome.storage.local.set({ urlChangeDetectorId: urlChangeDetector });
+} catch (e) {
+  // Silently handle any errors
+}
 
 /**
  * Create and add the overlay iframe to the page
@@ -152,13 +157,13 @@ async function handleChatGPTRequest(query: string, context: string): Promise<voi
       processing: true
     }, '*');
     
-    // Make sure we have the latest content extraction
-    if (!extractedPageContent) {
-      extractedPageContent = extractContent();
-    }
+    // Use the context provided by the UI if available, otherwise use extracted page content
+    const contextToUse = context && context.trim() 
+      ? context 
+      : extractedPageContent || (extractedPageContent = contentExtractor.formatContentForChatGPT(contentExtractor.extractContent()));
     
     // Send to OpenAI API
-    const response = await openAIService.sendMessage(query, context);
+    const response = await openAIService.sendMessage(query, contextToUse);
     
     // Send the response back to the iframe
     overlayFrame?.contentWindow?.postMessage({
@@ -191,25 +196,28 @@ function sendExtractedPageContent(): void {
   try {
     // Extract content if we haven't already
     if (!extractedPageContent) {
-      extractedPageContent = extractContent();
+      // Get the extraction result once
       const extractedResult = contentExtractor.extractContent();
-      const wordCount = extractedResult.wordCount;
+      // Format it for ChatGPT
+      extractedPageContent = contentExtractor.formatContentForChatGPT(extractedResult);
       
       // Send the content to the iframe
       overlayFrame?.contentWindow?.postMessage({
         action: 'pageTextExtracted',
         text: extractedPageContent,
-        wordCount: wordCount,
+        wordCount: extractedResult.wordCount,
         metadata: extractedResult.metadata
       }, '*');
     } else {
-      // Use cached content
-      const extractedResult = contentExtractor.extractContent();
+      // Use cached content - no need to re-extract
+      // We just need metadata for display purposes
+      const metadata = contentExtractor.extractMetadata();
+      
       overlayFrame?.contentWindow?.postMessage({
         action: 'pageTextExtracted',
         text: extractedPageContent,
-        wordCount: extractedResult.wordCount,
-        metadata: extractedResult.metadata
+        wordCount: extractedPageContent.split(/\s+/).filter(Boolean).length,
+        metadata: metadata
       }, '*');
     }
   } catch (err: unknown) {
@@ -220,7 +228,7 @@ function sendExtractedPageContent(): void {
     overlayFrame?.contentWindow?.postMessage({
       action: 'pageTextExtracted',
       text: fallbackText,
-      wordCount: fallbackText.split(/\s+/).length,
+      wordCount: fallbackText.split(/\s+/).filter(Boolean).length,
       error: errorMessage
     }, '*');
   }
@@ -228,6 +236,7 @@ function sendExtractedPageContent(): void {
 
 /**
  * Extract and format content from the page
+ * @deprecated Use contentExtractor directly instead
  */
 function extractContent(): string {
   try {
@@ -253,8 +262,9 @@ function extractPageTextSimple(): string {
   let text = body.innerText || '';
   
   // Limit to a reasonable size
-  if (text.length > 10000) {
-    text = text.substring(0, 10000) + '... (truncated)';
+  const maxCharLimit = 10000; // 10K character limit
+  if (text.length > maxCharLimit) {
+    text = text.substring(0, maxCharLimit) + `... (truncated to ${maxCharLimit} characters)`;
   }
   
   const wordCount = text.split(/\s+/).filter(Boolean).length;
@@ -264,7 +274,7 @@ function extractPageTextSimple(): string {
 Title: ${document.title}
 URL: ${window.location.href}
 
-PAGE CONTENT (${wordCount} words):
+PAGE CONTENT (${wordCount} words, ${text.length} characters):
 ${text}`;
 }
 
@@ -291,6 +301,11 @@ function handleToggleOverlay(forceState?: boolean): void {
     overlayFrame.style.display = 'none';
     overlayVisible = false;
   }
+  
+  // Track the overlay state in storage for the background script
+  if (chrome.storage && chrome.storage.local) {
+    chrome.storage.local.set({ overlayVisible: newState });
+  }
 }
 
 /**
@@ -311,5 +326,7 @@ function handleRuntimeMessage(
   return true; // Keep the connection open for async response
 }
 
-// Register the message listener
-chrome.runtime.onMessage.addListener(handleRuntimeMessage); 
+// Register the message listener and ensure it gets cleaned up
+chrome.runtime.onMessage.addListener(handleRuntimeMessage);
+
+ 

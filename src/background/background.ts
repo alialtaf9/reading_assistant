@@ -66,4 +66,15 @@ chrome.commands.onCommand.addListener((command) => {
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   sendResponse({ received: true });
   return true;
+});
+
+// Clean up any existing resources when the extension is unloaded or reloaded
+chrome.runtime.onSuspend.addListener(() => {
+  // Get any registered interval IDs and clear them
+  chrome.storage.local.get(['urlChangeDetectorId'], (result) => {
+    if (result.urlChangeDetectorId) {
+      clearInterval(result.urlChangeDetectorId);
+    }
+    chrome.storage.local.remove(['urlChangeDetectorId', 'overlayVisible']);
+  });
 }); 

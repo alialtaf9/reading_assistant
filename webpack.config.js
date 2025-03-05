@@ -4,7 +4,7 @@ const HtmlWebpackPlugin = require('html-webpack-plugin');
 
 module.exports = {
   mode: 'development',
-  devtool: false, // Remove source maps for simplicity
+  devtool: 'inline-source-map', // Add source maps for debugging
   entry: {
     'background/background': './src/background/background.ts',
     'content/contentScript': './src/content/contentScript.ts',
