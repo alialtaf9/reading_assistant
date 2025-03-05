@@ -9,22 +9,48 @@
 import { openAIService } from '../services/openaiService';
 import { contentExtractor } from '../services/contentExtractor';
 
-// Define types for message handling
-interface Message {
-  action: string;
+// Define strict type for metadata to prevent any
+interface PageMetadata {
+  title: string;
+  url: string;
+  siteName?: string;
+  description?: string;
+}
+
+// Define specific message types for better type safety
+interface ToggleOverlayMessage {
+  action: 'toggleOverlay';
   timestamp?: string;
-  query?: string;
-  context?: string;
+}
+
+interface ApiKeyMessage {
+  action: 'saveApiKey' | 'apiKeySaved' | 'checkApiKey' | 'apiKeyStatus';
   apiKey?: string;
-  processing?: boolean;
-  response?: string;
+  hasApiKey?: boolean;
   success?: boolean;
   error?: string;
+}
+
+interface ChatMessage {
+  action: 'sendToChatGPT' | 'chatGptResponse' | 'chatGptProcessing';
+  query?: string;
+  context?: string;
+  response?: string;
+  processing?: boolean;
+  success?: boolean;
+  error?: string;
+}
+
+interface ContentMessage {
+  action: 'getPageText' | 'pageTextExtracted' | 'refreshPageContent' | 'closeOverlay';
   text?: string;
   wordCount?: number;
-  metadata?: any;
-  hasApiKey?: boolean;
+  metadata?: PageMetadata;
+  error?: string;
 }
+
+// Define a union type for all message types
+type Message = ToggleOverlayMessage | ApiKeyMessage | ChatMessage | ContentMessage;
 
 // Keep track of if the overlay is currently shown
 let overlayVisible = false;

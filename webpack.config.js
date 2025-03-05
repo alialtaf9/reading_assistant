@@ -9,7 +9,7 @@ module.exports = {
     'background/background': './src/background/background.ts',
     'content/contentScript': './src/content/contentScript.ts',
     'overlay-ui/overlay': './src/overlay-ui/overlay.tsx',
-    'popup': './src/popup.js'  // Add popup.js as an entry point
+    'popup': './src/popup.js'  // Entry point for popup
   },
   output: {
     path: path.resolve(__dirname, 'dist'),
@@ -37,13 +37,21 @@ module.exports = {
       patterns: [
         { from: 'manifest.json', to: 'manifest.json' },
         { from: 'assets', to: 'assets' },
-        { from: 'popup.html', to: 'popup.html' }  // Copy popup.html
+        { from: 'popup.html', to: 'popup.html' }  // Copy popup.html for completeness
       ],
     }),
     new HtmlWebpackPlugin({
       template: './src/overlay-ui/index.html',
       filename: 'overlay-ui/index.html',
       chunks: ['overlay-ui/overlay'],
+    }),
+    // Keep this HtmlWebpackPlugin for popup.html but only use it when needed
+    // for development purposes, not for primary functionality
+    new HtmlWebpackPlugin({
+      template: './popup.html',
+      filename: 'popup.html',
+      chunks: ['popup'],
+      inject: false,
     }),
   ],
 }; 
